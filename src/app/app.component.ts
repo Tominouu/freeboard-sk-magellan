@@ -5,6 +5,7 @@ import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { Observable, Subject } from 'rxjs';
+import { SogDisplayComponent } from './sog-display/sog-display.component';
 
 // standalone
 import { CommonModule } from '@angular/common';
@@ -119,12 +120,14 @@ interface DrawEndEvent {
   type: string;
 }
 
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
-  //standalone: false
+  standalone: true,
   imports: [
+    SogDisplayComponent,
     MatMenuModule,
     MatSidenavModule,
     MatBadgeModule,
