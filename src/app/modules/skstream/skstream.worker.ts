@@ -120,6 +120,51 @@ let apDeviceId = 'freeboard-sk';
 
 // *******************************************************************
 
+/**
+ * Normalize numeric values from Signal K messages to a finite number.
+ * Signal K can send numeric values in different formats:
+ * - Plain number: 1.23
+ * - Object with value property: { value: 1.23, units: 'm/s' }
+ * - Numeric string: "1.23"
+ * 
+ * @param val - The value to normalize (can be number, string, object, null, or undefined)
+ * @returns A finite number, or 0 if the value is invalid/missing
+ * 
+ * @example
+ * normalizeNumericValue(1.23) // returns 1.23
+ * normalizeNumericValue({ value: 1.23, units: 'm/s' }) // returns 1.23
+ * normalizeNumericValue("1.23") // returns 1.23
+ * normalizeNumericValue(null) // returns 0
+ * normalizeNumericValue(NaN) // returns 0
+ */
+function normalizeNumericValue(val: any): number {
+  // Handle null/undefined
+  if (val == null) {
+    return 0;
+  }
+
+  // Handle plain number
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : 0;
+  }
+
+  // Handle object with value property (e.g., { value: 1.23, units: 'm/s' })
+  // Check specifically for plain objects with a value property, not arrays
+  if (val && typeof val === 'object' && !Array.isArray(val) && val.value != null) {
+    const numVal = Number(val.value);
+    return Number.isFinite(numVal) ? numVal : 0;
+  }
+
+  // Handle string
+  if (typeof val === 'string') {
+    const numVal = Number(val);
+    return Number.isFinite(numVal) ? numVal : 0;
+  }
+
+  // Default fallback
+  return 0;
+}
+
 // ** Initialise message data structures **
 function initVessels() {
   vessels = {
@@ -847,7 +892,7 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   } else if (v.path === 'navigation.state') {
     d.state = v.value;
   } else if (v.path === 'navigation.speedOverGround') {
-    d.sog = v.value;
+    d.sog = normalizeNumericValue(v.value);
   }
   // ** environment sun / mode
   else if (v.path === 'environment.mode') {
@@ -859,14 +904,14 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   else if (v.path === 'environment.wind.angleApparent') {
     d.wind.awa = v.value;
   } else if (v.path === 'environment.wind.speedApparent') {
-    d.wind.aws = v.value;
+    d.wind.aws = normalizeNumericValue(v.value);
   }
 
   // ** tws **
   else if (v.path === 'environment.wind.speedTrue') {
-    d.wind.speedTrue = v.value;
+    d.wind.speedTrue = normalizeNumericValue(v.value);
   } else if (v.path === 'environment.wind.speedOverGround') {
-    d.wind.sog = v.value;
+    d.wind.sog = normalizeNumericValue(v.value);
   }
 
   // ** wind direction **
@@ -951,12 +996,24 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   // ** cog vector **
   const cog = d.cogTrue ?? d.cogMagnetic ?? undefined;
   if (typeof cog !== 'undefined' && d.position) {
-    const cogLen = isSelf ? vesselPrefs.cogLine : vesselPrefs.aisCogLine;
-    const cvlen = (d.sog ?? 0) * (cogLen * 60);
-    d.vectors.cog = [
-      d.position,
-      GeoUtils.destCoordinate(d.position, cog, cvlen)
-    ];
+    try {
+      const cogLen = isSelf ? vesselPrefs.cogLine : vesselPrefs.aisCogLine;
+      const sogValue = normalizeNumericValue(d.sog);
+      const cvlen = sogValue * (cogLen * 60);
+      if (Number.isFinite(cvlen) && Number.isFinite(cog)) {
+        d.vectors.cog = [
+          d.position,
+          GeoUtils.destCoordinate(d.position, cog, cvlen)
+        ];
+      }
+    } catch (err) {
+      console.error('Error calculating COG vector for vessel:', {
+        id: d.id,
+        cog: cog,
+        sog: d.sog,
+        error: err
+      });
+    }
   }
 }
 
@@ -1174,7 +1231,7 @@ function processAircraft(id: string, v) {
   } else if (v.path === 'navigation.courseOverGroundTrue') {
     d.orientation = v.value;
   } else if (v.path === 'navigation.speedOverGround') {
-    d.sog = v.value;
+    d.sog = normalizeNumericValue(v.value);
   }
 }
 
