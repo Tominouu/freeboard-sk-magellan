@@ -120,8 +120,23 @@ let apDeviceId = 'freeboard-sk';
 
 // *******************************************************************
 
-// ** Normalize numeric values from Signal K **
-// Handles various formats: number, string, object with .value property
+/**
+ * Normalize numeric values from Signal K messages to a finite number.
+ * Signal K can send numeric values in different formats:
+ * - Plain number: 1.23
+ * - Object with value property: { value: 1.23, units: 'm/s' }
+ * - Numeric string: "1.23"
+ * 
+ * @param val - The value to normalize (can be number, string, object, null, or undefined)
+ * @returns A finite number, or 0 if the value is invalid/missing
+ * 
+ * @example
+ * normalizeNumericValue(1.23) // returns 1.23
+ * normalizeNumericValue({ value: 1.23, units: 'm/s' }) // returns 1.23
+ * normalizeNumericValue("1.23") // returns 1.23
+ * normalizeNumericValue(null) // returns 0
+ * normalizeNumericValue(NaN) // returns 0
+ */
 function normalizeNumericValue(val: any): number {
   // Handle null/undefined
   if (val == null) {
@@ -134,7 +149,8 @@ function normalizeNumericValue(val: any): number {
   }
 
   // Handle object with value property (e.g., { value: 1.23, units: 'm/s' })
-  if (typeof val === 'object' && val.value != null) {
+  // Check specifically for plain objects with a value property, not arrays
+  if (val && typeof val === 'object' && !Array.isArray(val) && val.value != null) {
     const numVal = Number(val.value);
     return Number.isFinite(numVal) ? numVal : 0;
   }
@@ -991,7 +1007,12 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
         ];
       }
     } catch (err) {
-      console.error('Error calculating COG vector:', err);
+      console.error('Error calculating COG vector for vessel:', {
+        id: d.id,
+        cog: cog,
+        sog: d.sog,
+        error: err
+      });
     }
   }
 }
