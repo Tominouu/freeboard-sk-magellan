@@ -120,6 +120,35 @@ let apDeviceId = 'freeboard-sk';
 
 // *******************************************************************
 
+// ** Normalize numeric values from Signal K **
+// Handles various formats: number, string, object with .value property
+function normalizeNumericValue(val: any): number {
+  // Handle null/undefined
+  if (val == null) {
+    return 0;
+  }
+
+  // Handle plain number
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : 0;
+  }
+
+  // Handle object with value property (e.g., { value: 1.23, units: 'm/s' })
+  if (typeof val === 'object' && val.value != null) {
+    const numVal = Number(val.value);
+    return Number.isFinite(numVal) ? numVal : 0;
+  }
+
+  // Handle string
+  if (typeof val === 'string') {
+    const numVal = Number(val);
+    return Number.isFinite(numVal) ? numVal : 0;
+  }
+
+  // Default fallback
+  return 0;
+}
+
 // ** Initialise message data structures **
 function initVessels() {
   vessels = {
@@ -847,7 +876,7 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   } else if (v.path === 'navigation.state') {
     d.state = v.value;
   } else if (v.path === 'navigation.speedOverGround') {
-    d.sog = v.value;
+    d.sog = normalizeNumericValue(v.value);
   }
   // ** environment sun / mode
   else if (v.path === 'environment.mode') {
@@ -859,14 +888,14 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   else if (v.path === 'environment.wind.angleApparent') {
     d.wind.awa = v.value;
   } else if (v.path === 'environment.wind.speedApparent') {
-    d.wind.aws = v.value;
+    d.wind.aws = normalizeNumericValue(v.value);
   }
 
   // ** tws **
   else if (v.path === 'environment.wind.speedTrue') {
-    d.wind.speedTrue = v.value;
+    d.wind.speedTrue = normalizeNumericValue(v.value);
   } else if (v.path === 'environment.wind.speedOverGround') {
-    d.wind.sog = v.value;
+    d.wind.sog = normalizeNumericValue(v.value);
   }
 
   // ** wind direction **
@@ -951,12 +980,19 @@ function processVessel(d: SKVessel, v: any, isSelf = false) {
   // ** cog vector **
   const cog = d.cogTrue ?? d.cogMagnetic ?? undefined;
   if (typeof cog !== 'undefined' && d.position) {
-    const cogLen = isSelf ? vesselPrefs.cogLine : vesselPrefs.aisCogLine;
-    const cvlen = (d.sog ?? 0) * (cogLen * 60);
-    d.vectors.cog = [
-      d.position,
-      GeoUtils.destCoordinate(d.position, cog, cvlen)
-    ];
+    try {
+      const cogLen = isSelf ? vesselPrefs.cogLine : vesselPrefs.aisCogLine;
+      const sogValue = normalizeNumericValue(d.sog);
+      const cvlen = sogValue * (cogLen * 60);
+      if (Number.isFinite(cvlen) && Number.isFinite(cog)) {
+        d.vectors.cog = [
+          d.position,
+          GeoUtils.destCoordinate(d.position, cog, cvlen)
+        ];
+      }
+    } catch (err) {
+      console.error('Error calculating COG vector:', err);
+    }
   }
 }
 
@@ -1174,7 +1210,7 @@ function processAircraft(id: string, v) {
   } else if (v.path === 'navigation.courseOverGroundTrue') {
     d.orientation = v.value;
   } else if (v.path === 'navigation.speedOverGround') {
-    d.sog = v.value;
+    d.sog = normalizeNumericValue(v.value);
   }
 }
 
